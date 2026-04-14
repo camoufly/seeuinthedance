@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes, viewport-fit=cover">
+  <meta name="description" content="camoufly">
+  <meta property="og:title" content="camoufly" />
+  <meta property="og:image" content="https://seeuinthe.dance/og.jpg" />
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500&display=swap" rel="stylesheet">
+  <title>camoufly</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%; height: 100%;
+      font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      background: #000;
+      overflow: hidden;
+    }
+
+    /* video background */
+    .bg { position: fixed; inset: 0; overflow: hidden; z-index: 0; }
+    .bg video {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover; object-position: center center;
+      pointer-events: none;
+    }
+    .bg::after {
+      content: ''; position: absolute; inset: 0;
+      background: rgba(0,0,0,0.25);
+    }
+
+    /* password field — dead center */
+    .pwd {
+      position: fixed; inset: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .pwd input {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.22); border-right: none;
+      border-radius: 6px 0 0 6px; color: #fff;
+      font-family: inherit; font-size: 11px; letter-spacing: 0.1em;
+      padding: 8px 14px; width: 140px; outline: none;
+      transition: border-color 0.2s, background 0.2s;
+      -webkit-text-security: disc;
+    }
+    .pwd input::placeholder { color: rgba(255,255,255,0.28); letter-spacing: 0.08em; }
+    .pwd input:focus { background: rgba(255,255,255,0.13); border-color: rgba(255,255,255,0.5); }
+    .pwd button {
+      background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 0 6px 6px 0; color: rgba(255,255,255,0.5);
+      font-family: inherit; font-size: 12px; padding: 8px 12px;
+      cursor: pointer; transition: background 0.2s, color 0.2s; line-height: 1;
+    }
+    .pwd button:hover { background: rgba(255,255,255,0.2); color: #fff; }
+    .pwd.error input { border-color: rgba(255,70,70,0.7); animation: shake 0.28s ease; }
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      30% { transform: translateX(-5px); }
+      70% { transform: translateX(5px); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="bg">
+    <video autoplay muted loop playsinline preload="auto">
+      <source src="images/bg.mp4" type="video/mp4">
+    </video>
+  </div>
+
+  <div class="pwd" id="pwd">
+    <input type="password" id="pwd-input" placeholder="password" autocomplete="off" spellcheck="false">
+    <button id="pwd-btn">→</button>
+  </div>
+
+  <script>
+    const wrap  = document.getElementById('pwd');
+    const input = document.getElementById('pwd-input');
+    const btn   = document.getElementById('pwd-btn');
+
+    async function check() {
+      const val = input.value.trim();
+      if (!val) return;
+      btn.textContent = '…';
+      btn.disabled = true;
+      try {
+        const res  = await fetch('/api/unlock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: val })
+        });
+        const data = await res.json();
+        if (data.url) {
+          window.location.href = data.url;
+        } else {
+          throw new Error();
+        }
+      } catch {
+        wrap.classList.add('error');
+        input.value = '';
+        btn.textContent = '→';
+        btn.disabled = false;
+        setTimeout(() => wrap.classList.remove('error'), 500);
+        input.focus();
+      }
+    }
+
+    btn.addEventListener('click', check);
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
+  </script>
+
+</body>
+</html>
