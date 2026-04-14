@@ -12,10 +12,9 @@ export default function handler(req, res) {
   // Aggiungi qui le tue password → URL
   // Le password sono visibili, gli URL vivono solo su Vercel env vars
   const map = {
-    'press':      process.env.PWD_PRESS,
-    'booking':    process.env.PWD_BOOKING,
-    'exclusive':  process.env.PWD_EXCLUSIVE,
+    'camoufly': process.env.PWD_CAMOUFLY,
   };
+
 
   const url = map[password.trim().toLowerCase()];
 
