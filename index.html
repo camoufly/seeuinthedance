@@ -509,12 +509,12 @@
 
   function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-  async function sendComment() {
+async function sendComment() {
     if (!commentsEnabled || !currentArtifact) return;
     const inp = document.getElementById('comment-input');
     const text = inp.value.trim();
     if (!text || text.length < 2) return;
-    // spam check handled server-side by Akismet    try {
+    try {
       const res = await fetch('/api/comments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
