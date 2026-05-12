@@ -42,14 +42,12 @@
       background: rgba(0,0,0,0.72);
     }
 
-    /* clock only */
     .status {
       position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-      z-index: 5; font-size: 9px; letter-spacing: 0.18em;
+      z-index: 15; font-size: 9px; letter-spacing: 0.18em;
       color: var(--dim); pointer-events: none;
     }
 
-    /* layers */
     #layer-pwd, #layer-timeline, #layer-viewer {
       position: fixed; inset: 0; z-index: 10;
       transition: opacity 0.4s ease;
@@ -59,7 +57,6 @@
     #layer-viewer { display: none; }
     .layer-hidden { opacity: 0 !important; pointer-events: none !important; }
 
-    /* password */
     .pwd-box { display: flex; flex-direction: column; align-items: center; gap: 32px; }
     .pwd-row { display: flex; }
     .pwd-row input {
@@ -92,16 +89,15 @@
       70% { transform: translateX(6px); }
     }
 
-    /* timeline */
     .tl-scroll {
       position: absolute; inset: 0;
       overflow-y: auto; overflow-x: hidden;
       padding: 80px 0;
       scrollbar-width: thin; scrollbar-color: var(--dim2) transparent;
     }
-    .tl-inner { max-width: 680px; margin: 0 auto; position: relative; }
     .tl-scroll::-webkit-scrollbar { width: 3px; }
     .tl-scroll::-webkit-scrollbar-thumb { background: var(--dim2); border-radius: 2px; }
+    .tl-inner { max-width: 680px; margin: 0 auto; position: relative; }
     .tl-canvas { position: relative; width: 100%; }
     .tl-svg {
       position: absolute; top: 0; left: 0;
@@ -137,7 +133,6 @@
     .tl-node[data-label-pos="above"] .tl-node-label { bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); }
     .tl-node[data-label-pos="below"] .tl-node-label { top: calc(100% + 4px); left: 50%; transform: translateX(-50%); }
 
-    /* viewer */
     #layer-viewer { background: #000; flex-direction: column; }
     #layer-viewer.active { display: flex; }
 
@@ -190,7 +185,6 @@
     .btn-ghost:hover { color: var(--fg); border-color: var(--dim); }
     .btn-ghost.accent:hover { color: var(--accent); border-color: var(--accent); }
 
-    /* comments */
     .viewer-comments {
       border-top: 1px solid var(--dim2); flex-shrink: 0;
       max-height: 220px; display: flex; flex-direction: column;
@@ -232,7 +226,7 @@
     .comments-form input::placeholder { color: var(--dim); }
     .comments-form input:focus { border-color: var(--dim); }
     .comments-form button {
-      background: rgba(232,228,220,0.12);
+      background: rgba(232,228,220,0.06);
       border: 1px solid var(--dim2); border-radius: 0 2px 2px 0; color: var(--dim);
       font-family: 'IBM Plex Mono', monospace; font-size: 10px;
       padding: 7px 14px; cursor: pointer; transition: all 0.2s;
@@ -257,7 +251,6 @@
   </div>
 
   <div class="status" id="status-clock"></div>
-
   <div id="tx"></div>
 
   <!-- PASSWORD -->
@@ -273,9 +266,11 @@
   <!-- TIMELINE -->
   <div id="layer-timeline" class="layer-hidden">
     <div class="tl-scroll" id="tl-scroll">
-      <div class="tl-inner"><div class="tl-canvas" id="tl-canvas">
-        <svg class="tl-svg" id="tl-svg"><path id="tl-path" d=""/></svg>
-      </div></div>
+      <div class="tl-inner">
+        <div class="tl-canvas" id="tl-canvas">
+          <svg class="tl-svg" id="tl-svg"><path id="tl-path" d=""/></svg>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -283,7 +278,7 @@
   <div id="layer-viewer">
     <div class="viewer-top">
       <div class="viewer-num-top" id="v-num-top"></div>
-      <button class="viewer-back" id="viewer-back">←</button>
+      <button class="viewer-back" id="viewer-back">← Back</button>
     </div>
     <div class="viewer-body">
       <div class="viewer-media" id="v-media"></div>
@@ -315,20 +310,17 @@
     { id:'003', title:'BOILER ROOM MILAN', date:'2024-01-20', type:'audio-mp3',   src:'/audio/003.mp3', download:'/audio/003.mp3' },
   ];
 
-  // clock
   setInterval(() => {
     const d = new Date();
     document.getElementById('status-clock').textContent = d.toUTCString().slice(17,25) + ' UTC';
   }, 1000);
 
-  // transition
   const tx = document.getElementById('tx');
   function fade(cb) {
     tx.classList.add('in');
     setTimeout(() => { cb(); tx.classList.remove('in'); }, 320);
   }
 
-  // layers
   const layerPwd      = document.getElementById('layer-pwd');
   const layerTimeline = document.getElementById('layer-timeline');
   const layerViewer   = document.getElementById('layer-viewer');
@@ -341,14 +333,22 @@
     if (!val) return;
     pwdBtn.textContent = '…';
     pwdBtn.disabled = true;
-    await new Promise(r => setTimeout(r, 280));
-    if (val.toLowerCase() === 'demo') {
-      fade(() => {
-        layerPwd.classList.add('layer-hidden');
-        layerTimeline.classList.remove('layer-hidden');
-        buildTimeline();
+    try {
+      const res = await fetch('/api/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: val }),
       });
-    } else {
+      if (res.ok) {
+        fade(() => {
+          layerPwd.classList.add('layer-hidden');
+          layerTimeline.classList.remove('layer-hidden');
+          buildTimeline();
+        });
+      } else {
+        throw new Error();
+      }
+    } catch {
       pwdBox.classList.add('error');
       pwdInput.value = '';
       pwdBtn.textContent = '→';
@@ -361,7 +361,6 @@
   pwdBtn.addEventListener('click', checkPassword);
   pwdInput.addEventListener('keydown', e => { if (e.key === 'Enter') checkPassword(); });
 
-  // timeline
   function buildTimeline() {
     const canvas  = document.getElementById('tl-canvas');
     const svgPath = document.getElementById('tl-path');
@@ -417,14 +416,13 @@
     resizeT = setTimeout(() => { if (!layerTimeline.classList.contains('layer-hidden')) buildTimeline(); }, 200);
   });
 
-  // viewer
   let currentArtifact = null;
   let commentsEnabled = true;
 
   function openArtifact(art) {
     currentArtifact = art;
     fade(() => {
-      document.getElementById('v-num-top').textContent = '#' + art.id;
+      document.getElementById('v-num-top').textContent = '← #' + art.id;
       document.getElementById('v-num').textContent   = '#' + art.id;
       document.getElementById('v-title').textContent = art.title;
       document.getElementById('v-date').textContent  = art.date;
@@ -466,10 +464,6 @@
     });
   });
 
-  // comments
-  const BAD_WORDS = ['spam','fuck','shit','cunt','nigger','nazi','kys','kill yourself','asshole'];
-  const isBad = t => BAD_WORDS.some(w => t.toLowerCase().includes(w));
-
   function updateCommentsUI() {
     const form = document.getElementById('comments-form');
     const off  = document.getElementById('comments-disabled');
@@ -481,14 +475,14 @@
   }
   document.getElementById('comments-toggle').addEventListener('click', () => { commentsEnabled = !commentsEnabled; updateCommentsUI(); });
 
-  const _mock = {};
   async function loadComments(id) {
-    await new Promise(r => setTimeout(r, 180));
-    if (!_mock[id]) _mock[id] = [
-      { text: 'incredible set, was there for this one', ts: 1672531200000 },
-      { text: 'the drop at 47min is insane', ts: 1683110400000 },
-    ];
-    renderComments(_mock[id]);
+    try {
+      const res = await fetch(`/api/comments?id=${encodeURIComponent(id)}`);
+      const data = await res.json();
+      renderComments(data.comments || []);
+    } catch {
+      renderComments([]);
+    }
   }
 
   function renderComments(comments) {
@@ -511,13 +505,17 @@
     const inp = document.getElementById('comment-input');
     const text = inp.value.trim();
     if (!text || text.length < 2) return;
-    if (isBad(text)) { inp.value = ''; inp.placeholder = 'REJECTED'; setTimeout(() => inp.placeholder = '...', 2000); return; }
-    const id = currentArtifact.id;
-    if (!_mock[id]) _mock[id] = [];
-    _mock[id].push({ text, ts: Date.now() });
-    inp.value = '';
-    renderComments(_mock[id]);
-    inp.focus();
+    try {
+      const res = await fetch('/api/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: currentArtifact.id, text }),
+      });
+      const data = await res.json();
+      if (res.ok) { inp.value = ''; renderComments(data.comments || []); inp.focus(); }
+    } catch {
+      inp.placeholder = 'ERROR'; setTimeout(() => inp.placeholder = '...', 2000);
+    }
   }
 
   document.getElementById('comment-send').addEventListener('click', sendComment);
