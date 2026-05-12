@@ -335,19 +335,27 @@
   const pwdInput      = document.getElementById('pwd-input');
   const pwdBtn        = document.getElementById('pwd-btn');
 
-  async function checkPassword() {
+async function checkPassword() {
     const val = pwdInput.value.trim();
     if (!val) return;
     pwdBtn.textContent = '…';
     pwdBtn.disabled = true;
-    await new Promise(r => setTimeout(r, 280));
-    if (val.toLowerCase() === 'demo') {
-      fade(() => {
-        layerPwd.classList.add('layer-hidden');
-        layerTimeline.classList.remove('layer-hidden');
-        buildTimeline();
+    try {
+      const res = await fetch('/api/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: val }),
       });
-    } else {
+      if (res.ok) {
+        fade(() => {
+          layerPwd.classList.add('layer-hidden');
+          layerTimeline.classList.remove('layer-hidden');
+          buildTimeline();
+        });
+      } else {
+        throw new Error();
+      }
+    } catch {
       pwdBox.classList.add('error');
       pwdInput.value = '';
       pwdBtn.textContent = '→';
