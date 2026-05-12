@@ -204,7 +204,6 @@
     .comments-list {
       flex: 1; overflow-y: auto; padding: 0 28px;
       scrollbar-width: thin; scrollbar-color: var(--dim2) transparent;
-      overscroll-behavior: contain; max-height: 120px;
     }
     .comments-list::-webkit-scrollbar { width: 3px; }
     .comments-list::-webkit-scrollbar-thumb { background: var(--dim2); }
@@ -216,7 +215,7 @@
     .comment-ts { font-size: 8px; letter-spacing: 0.1em; color: var(--dim); flex-shrink: 0; }
     .comment-text { font-size: 10px; color: var(--fg); font-family: 'IBM Plex Sans', sans-serif; line-height: 1.5; }
     .comments-empty { font-size: 9px; color: var(--dim); padding: 12px 0; letter-spacing: 0.12em; }
-    .comments-form { padding: 10px 28px 14px; display: flex; flex-shrink: 0; margin-bottom: 48px; }
+    .comments-form { padding: 10px 28px 14px; display: flex; flex-shrink: 0; }
     .comments-form input {
       flex: 1; background: rgba(232,228,220,0.04);
       border: 1px solid var(--dim2); border-right: none;
@@ -278,8 +277,8 @@
   <!-- VIEWER -->
   <div id="layer-viewer">
     <div class="viewer-top">
-      <div class="viewer-num-top" id="v-num-top"></div>
       <button class="viewer-back" id="viewer-back">← Back</button>
+      <div class="viewer-num-top" id="v-num-top"></div>
     </div>
     <div class="viewer-body">
       <div class="viewer-media" id="v-media"></div>
@@ -423,7 +422,7 @@
   function openArtifact(art) {
     currentArtifact = art;
     fade(() => {
-      document.getElementById('v-num-top').textContent = '← #' + art.id;
+      document.getElementById('v-num-top').textContent = '#' + art.id;
       document.getElementById('v-num').textContent   = '#' + art.id;
       document.getElementById('v-title').textContent = art.title;
       document.getElementById('v-date').textContent  = art.date;
