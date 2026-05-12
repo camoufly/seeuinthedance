@@ -487,15 +487,15 @@ async function checkPassword() {
   }
   document.getElementById('comments-toggle').addEventListener('click', () => { commentsEnabled = !commentsEnabled; updateCommentsUI(); });
 
-  const _mock = {};
   async function loadComments(id) {
-    await new Promise(r => setTimeout(r, 180));
-    if (!_mock[id]) _mock[id] = [
-      { text: 'incredible set, was there for this one', ts: 1672531200000 },
-      { text: 'the drop at 47min is insane', ts: 1683110400000 },
-    ];
-    renderComments(_mock[id]);
-  }
+      try {
+        const res = await fetch(`/api/comments?id=${encodeURIComponent(id)}`);
+        const data = await res.json();
+        renderComments(data.comments || []);
+      } catch {
+        renderComments([]);
+      }
+    }
 
   function renderComments(comments) {
     const list = document.getElementById('comments-list');
@@ -513,18 +513,23 @@ async function checkPassword() {
   function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   async function sendComment() {
-    if (!commentsEnabled || !currentArtifact) return;
-    const inp = document.getElementById('comment-input');
-    const text = inp.value.trim();
-    if (!text || text.length < 2) return;
-    if (isBad(text)) { inp.value = ''; inp.placeholder = 'REJECTED'; setTimeout(() => inp.placeholder = '...', 2000); return; }
-    const id = currentArtifact.id;
-    if (!_mock[id]) _mock[id] = [];
-    _mock[id].push({ text, ts: Date.now() });
-    inp.value = '';
-    renderComments(_mock[id]);
-    inp.focus();
-  }
+      if (!commentsEnabled || !currentArtifact) return;
+      const inp = document.getElementById('comment-input');
+      const text = inp.value.trim();
+      if (!text || text.length < 2) return;
+      if (isBad(text)) { inp.value = ''; inp.placeholder = 'REJECTED'; setTimeout(() => inp.placeholder = '...', 2000); return; }
+      try {
+        const res = await fetch('/api/comments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: currentArtifact.id, text }),
+        });
+        const data = await res.json();
+        if (res.ok) { inp.value = ''; renderComments(data.comments || []); inp.focus(); }
+      } catch {
+        inp.placeholder = 'ERROR'; setTimeout(() => inp.placeholder = '...', 2000);
+      }
+    }
 
   document.getElementById('comment-send').addEventListener('click', sendComment);
   document.getElementById('comment-input').addEventListener('keydown', e => { if (e.key === 'Enter') sendComment(); });
