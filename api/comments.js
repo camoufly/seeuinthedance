@@ -1,16 +1,3 @@
-/**
- * /api/comments.js
- * GET  /api/comments?id=001       → returns comments array for artifact
- * POST /api/comments              → body: { id, text } → saves comment, returns updated array
- *
- * Requires Vercel env vars:
- *   UPSTASH_REDIS_REST_URL
- *   UPSTASH_REDIS_REST_TOKEN
- *
- * Install dependency:
- *   npm install @upstash/redis
- */
-
 import { Redis } from '@upstash/redis';
 
 const redis = new Redis({
@@ -18,54 +5,77 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
-const MAX_COMMENTS = 200; // max per artifact
+const MAX_COMMENTS = 200;
 const MAX_LENGTH   = 280;
-
-// Basic filter list — duplicated here as server-side safety net
-const BAD_WORDS = ['spam','fuck','shit','cunt','nigger','nazi','kys','kill yourself','hate','asshole'];
-function isBad(text) {
-  const lower = text.toLowerCase();
-  return BAD_WORDS.some(w => lower.includes(w));
-}
 
 function key(id) {
   return `archive:comments:${id}`;
 }
 
+async function isSpam(text, userIp, userAgent) {
+  const apiKey  = process.env.AKISMET_API_KEY;
+  const siteUrl = process.env.AKISMET_SITE_URL;
+
+  const params = new URLSearchParams({
+    blog:            siteUrl,
+    user_ip:         userIp || '127.0.0.1',
+    user_agent:      userAgent || '',
+    comment_type:    'comment',
+    comment_content: text,
+  });
+
+  const res = await fetch(`https://${apiKey}.rest.akismet.com/1.1/comment-check`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body:    params.toString(),
+  });
+
+  const body = await res.text();
+  return body.trim() === 'true';
+}
+
 export default async function handler(req, res) {
-  // ── CORS (optional, restrict to your domain in production) ──
   res.setHeader('Access-Control-Allow-Origin', 'https://seeuinthe.dance');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  // ── GET ──────────────────────────────────────────────────────
+  // GET
   if (req.method === 'GET') {
     const { id } = req.query;
     if (!id) return res.status(400).json({ error: 'Missing id' });
-
     const raw = await redis.lrange(key(id), 0, -1);
     const comments = raw.map(r => (typeof r === 'string' ? JSON.parse(r) : r));
     return res.status(200).json({ comments });
   }
 
-  // ── POST ─────────────────────────────────────────────────────
+  // POST
   if (req.method === 'POST') {
     const { id, text } = req.body || {};
-
-    if (!id || typeof id !== 'string')   return res.status(400).json({ error: 'Missing id' });
+    if (!id || typeof id !== 'string')     return res.status(400).json({ error: 'Missing id' });
     if (!text || typeof text !== 'string') return res.status(400).json({ error: 'Missing text' });
-    if (text.length > MAX_LENGTH)         return res.status(400).json({ error: 'Too long' });
-    if (isBad(text))                      return res.status(400).json({ error: 'Rejected' });
+    if (text.length > MAX_LENGTH)          return res.status(400).json({ error: 'Too long' });
+
+    const userIp    = req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress;
+    const userAgent = req.headers['user-agent'] || '';
+
+    try {
+      const spam = await isSpam(text, userIp, userAgent);
+      if (spam) {
+        // silently discard — return existing comments so user doesn't know
+        const raw = await redis.lrange(key(id), 0, -1);
+        const comments = raw.map(r => (typeof r === 'string' ? JSON.parse(r) : r));
+        return res.status(200).json({ comments });
+      }
+    } catch {
+      // Akismet unreachable — let comment through
+    }
 
     const entry = JSON.stringify({ text: text.trim(), ts: Date.now() });
-    const k = key(id);
+    await redis.rpush(key(id), entry);
+    await redis.ltrim(key(id), -MAX_COMMENTS, -1);
 
-    await redis.rpush(k, entry);
-    // Trim to max
-    await redis.ltrim(k, -MAX_COMMENTS, -1);
-
-    const raw = await redis.lrange(k, 0, -1);
+    const raw = await redis.lrange(key(id), 0, -1);
     const comments = raw.map(r => (typeof r === 'string' ? JSON.parse(r) : r));
     return res.status(200).json({ comments });
   }

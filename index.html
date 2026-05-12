@@ -472,9 +472,6 @@
     });
   });
 
-  // comments
-  const BAD_WORDS = ['fuck'];
-  const isBad = t => BAD_WORDS.some(w => t.toLowerCase().includes(w));
 
   function updateCommentsUI() {
     const form = document.getElementById('comments-form');
@@ -517,8 +514,7 @@
     const inp = document.getElementById('comment-input');
     const text = inp.value.trim();
     if (!text || text.length < 2) return;
-    if (isBad(text)) { inp.value = ''; inp.placeholder = 'REJECTED'; setTimeout(() => inp.placeholder = '...', 2000); return; }
-    try {
+    // spam check handled server-side by Akismet    try {
       const res = await fetch('/api/comments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
