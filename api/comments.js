@@ -1,10 +1,12 @@
 import { Redis } from '@upstash/redis';
+import { Filter } from 'bad-words';
 
 const redis = new Redis({
   url: process.env.UPSTASH_REDIS_REST_URL,
   token: process.env.UPSTASH_REDIS_REST_TOKEN,
 });
 
+const filter = new Filter();
 const MAX_COMMENTS = 200;
 const MAX_LENGTH   = 280;
 
@@ -31,7 +33,6 @@ async function isSpam(text, userIp, userAgent) {
   });
 
   const body = await res.text();
-  console.log('Akismet response:', body.trim(), '| text:', text, '| ip:', userIp);
   return body.trim() === 'true';
 }
 
@@ -57,20 +58,24 @@ export default async function handler(req, res) {
     if (!text || typeof text !== 'string') return res.status(400).json({ error: 'Missing text' });
     if (text.length > MAX_LENGTH)          return res.status(400).json({ error: 'Too long' });
 
+    // bad-words check
+    if (filter.isProfane(text)) {
+      return res.status(400).json({ error: 'Rejected' });
+    }
+
     const userIp    = req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress;
     const userAgent = req.headers['user-agent'] || '';
 
+    // Akismet spam check
     try {
       const spam = await isSpam(text, userIp, userAgent);
       if (spam) {
-        console.log('Spam blocked:', text);
         const raw = await redis.lrange(key(id), 0, -1);
         const comments = raw.map(r => (typeof r === 'string' ? JSON.parse(r) : r));
         return res.status(200).json({ comments });
       }
     } catch (err) {
       console.error('Akismet error:', err);
-      // Akismet unreachable — let comment through
     }
 
     const entry = JSON.stringify({ text: text.trim(), ts: Date.now() });
