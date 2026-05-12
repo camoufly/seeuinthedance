@@ -13,10 +13,10 @@
       --bg: #000;
       --fg: #e8e4dc;
       --accent: #c8ff00;
-      --dim: rgba(232,228,220,0.28);
-      --dim2: rgba(232,228,220,0.08);
+      --dim: rgba(232,228,220,0.5);
+      --dim2: rgba(232,228,220,0.14);
       --node-size: 10px;
-      --line-color: rgba(232,228,220,0.18);
+      --line-color: rgba(232,228,220,0.32);
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -99,6 +99,11 @@
       padding: 80px 0;
       scrollbar-width: thin; scrollbar-color: var(--dim2) transparent;
     }
+    .tl-inner {
+      max-width: 860px;
+      margin: 0 auto;
+      position: relative;
+    }
     .tl-scroll::-webkit-scrollbar { width: 3px; }
     .tl-scroll::-webkit-scrollbar-thumb { background: var(--dim2); border-radius: 2px; }
     .tl-canvas { position: relative; width: 100%; }
@@ -119,8 +124,8 @@
     .tl-node-dot {
       width: var(--node-size); height: var(--node-size);
       border-radius: 50%;
-      border: 1px solid rgba(232,228,220,0.4);
-      background: rgba(232,228,220,0.06);
+      border: 1px solid rgba(232,228,220,0.65);
+      background: rgba(232,228,220,0.1);
       transition: all 0.25s ease; position: relative;
     }
     .tl-node:hover .tl-node-dot {
@@ -153,7 +158,7 @@
     }
     .viewer-back:hover { color: var(--fg); border-color: var(--dim); }
 
-    .viewer-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .viewer-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; max-width: 860px; width: 100%; margin: 0 auto; }
     .viewer-media {
       flex: 1; display: flex; align-items: center; justify-content: center;
       padding: 28px; min-height: 0;
@@ -231,7 +236,7 @@
     .comments-form input::placeholder { color: var(--dim); }
     .comments-form input:focus { border-color: var(--dim); }
     .comments-form button {
-      background: rgba(232,228,220,0.06);
+      background: rgba(232,228,220,0.1);
       border: 1px solid var(--dim2); border-radius: 0 2px 2px 0; color: var(--dim);
       font-family: 'IBM Plex Mono', monospace; font-size: 10px;
       padding: 7px 14px; cursor: pointer; transition: all 0.2s;
@@ -272,9 +277,9 @@
   <!-- TIMELINE -->
   <div id="layer-timeline" class="layer-hidden">
     <div class="tl-scroll" id="tl-scroll">
-      <div class="tl-canvas" id="tl-canvas">
+      <div class="tl-inner"><div class="tl-canvas" id="tl-canvas">
         <svg class="tl-svg" id="tl-svg"><path id="tl-path" d=""/></svg>
-      </div>
+      </div></div>
     </div>
   </div>
 
@@ -282,7 +287,7 @@
   <div id="layer-viewer">
     <div class="viewer-top">
       <div class="viewer-num-top" id="v-num-top"></div>
-      <button class="viewer-back" id="viewer-back">←</button>
+      <button class="viewer-back" id="viewer-back">← Back</button>
     </div>
     <div class="viewer-body">
       <div class="viewer-media" id="v-media"></div>
@@ -335,27 +340,19 @@
   const pwdInput      = document.getElementById('pwd-input');
   const pwdBtn        = document.getElementById('pwd-btn');
 
-async function checkPassword() {
+  async function checkPassword() {
     const val = pwdInput.value.trim();
     if (!val) return;
     pwdBtn.textContent = '…';
     pwdBtn.disabled = true;
-    try {
-      const res = await fetch('/api/unlock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: val }),
+    await new Promise(r => setTimeout(r, 280));
+    if (val.toLowerCase() === 'demo') {
+      fade(() => {
+        layerPwd.classList.add('layer-hidden');
+        layerTimeline.classList.remove('layer-hidden');
+        buildTimeline();
       });
-      if (res.ok) {
-        fade(() => {
-          layerPwd.classList.add('layer-hidden');
-          layerTimeline.classList.remove('layer-hidden');
-          buildTimeline();
-        });
-      } else {
-        throw new Error();
-      }
-    } catch {
+    } else {
       pwdBox.classList.add('error');
       pwdInput.value = '';
       pwdBtn.textContent = '→';
@@ -375,7 +372,8 @@ async function checkPassword() {
     const scroll  = document.getElementById('tl-scroll');
     canvas.querySelectorAll('.tl-node').forEach(n => n.remove());
 
-    const W = scroll.clientWidth;
+    const inner = document.querySelector('.tl-inner');
+    const W = Math.min(scroll.clientWidth, inner ? inner.clientWidth : scroll.clientWidth);
     const PAD_X = Math.max(60, W * 0.1);
     const PAD_Y = 80;
     const ROW_H = 100;
@@ -430,7 +428,7 @@ async function checkPassword() {
   function openArtifact(art) {
     currentArtifact = art;
     fade(() => {
-      document.getElementById('v-num-top').textContent = '#' + art.id;
+      document.getElementById('v-num-top').textContent = '← #' + art.id;
       document.getElementById('v-num').textContent   = '#' + art.id;
       document.getElementById('v-title').textContent = art.title;
       document.getElementById('v-date').textContent  = art.date;
@@ -487,15 +485,15 @@ async function checkPassword() {
   }
   document.getElementById('comments-toggle').addEventListener('click', () => { commentsEnabled = !commentsEnabled; updateCommentsUI(); });
 
+  const _mock = {};
   async function loadComments(id) {
-      try {
-        const res = await fetch(`/api/comments?id=${encodeURIComponent(id)}`);
-        const data = await res.json();
-        renderComments(data.comments || []);
-      } catch {
-        renderComments([]);
-      }
-    }
+    await new Promise(r => setTimeout(r, 180));
+    if (!_mock[id]) _mock[id] = [
+      { text: 'incredible set, was there for this one', ts: 1672531200000 },
+      { text: 'the drop at 47min is insane', ts: 1683110400000 },
+    ];
+    renderComments(_mock[id]);
+  }
 
   function renderComments(comments) {
     const list = document.getElementById('comments-list');
@@ -513,23 +511,18 @@ async function checkPassword() {
   function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   async function sendComment() {
-      if (!commentsEnabled || !currentArtifact) return;
-      const inp = document.getElementById('comment-input');
-      const text = inp.value.trim();
-      if (!text || text.length < 2) return;
-      if (isBad(text)) { inp.value = ''; inp.placeholder = 'REJECTED'; setTimeout(() => inp.placeholder = '...', 2000); return; }
-      try {
-        const res = await fetch('/api/comments', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: currentArtifact.id, text }),
-        });
-        const data = await res.json();
-        if (res.ok) { inp.value = ''; renderComments(data.comments || []); inp.focus(); }
-      } catch {
-        inp.placeholder = 'ERROR'; setTimeout(() => inp.placeholder = '...', 2000);
-      }
-    }
+    if (!commentsEnabled || !currentArtifact) return;
+    const inp = document.getElementById('comment-input');
+    const text = inp.value.trim();
+    if (!text || text.length < 2) return;
+    if (isBad(text)) { inp.value = ''; inp.placeholder = 'REJECTED'; setTimeout(() => inp.placeholder = '...', 2000); return; }
+    const id = currentArtifact.id;
+    if (!_mock[id]) _mock[id] = [];
+    _mock[id].push({ text, ts: Date.now() });
+    inp.value = '';
+    renderComments(_mock[id]);
+    inp.focus();
+  }
 
   document.getElementById('comment-send').addEventListener('click', sendComment);
   document.getElementById('comment-input').addEventListener('keydown', e => { if (e.key === 'Enter') sendComment(); });
