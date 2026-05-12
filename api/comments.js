@@ -62,6 +62,10 @@ export default async function handler(req, res) {
     if (filter.isProfane(text)) {
       return res.status(400).json({ error: 'Rejected' });
     }
+    // link check
+    if (/https?:\/\/|www\./i.test(text)) {
+      return res.status(400).json({ error: 'Rejected' });
+    }
 
     const userIp    = req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress;
     const userAgent = req.headers['user-agent'] || '';
