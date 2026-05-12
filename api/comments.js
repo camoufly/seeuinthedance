@@ -67,9 +67,11 @@ export default async function handler(req, res) {
         const comments = raw.map(r => (typeof r === 'string' ? JSON.parse(r) : r));
         return res.status(200).json({ comments });
       }
-    } catch {
+    } catch (err) {
+      console.error('Akismet error:', err);
       // Akismet unreachable — let comment through
     }
+
 
     const entry = JSON.stringify({ text: text.trim(), ts: Date.now() });
     await redis.rpush(key(id), entry);
