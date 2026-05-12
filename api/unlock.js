@@ -1,3 +1,11 @@
+/**
+ * /api/unlock.js
+ * POST { password } → { ok: true } on success (frontend handles navigation)
+ *
+ * Env vars:
+ *   ARCHIVE_PASSWORD   — the single access password (or extend the map for multiple)
+ */
+
 export default function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -9,17 +17,12 @@ export default function handler(req, res) {
     return res.status(400).json({ error: 'Missing password' });
   }
 
-  // Aggiungi qui le tue password → URL
-  // Le password sono visibili, gli URL vivono solo su Vercel env vars
-  const map = {
-    'camoufly': process.env.PWD_CAMOUFLY,
-  };
+  // Single password → archive access
+  // Extend to a map if you want multiple passwords with different destinations
+  const valid = password.trim().toLowerCase() === (process.env.ARCHIVE_PASSWORD || '').toLowerCase();
 
-
-  const url = map[password.trim().toLowerCase()];
-
-  if (url) {
-    return res.status(200).json({ url });
+  if (valid) {
+    return res.status(200).json({ ok: true });
   } else {
     return res.status(401).json({ error: 'Invalid password' });
   }

@@ -3,68 +3,248 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes, viewport-fit=cover">
-  <meta name="description" content="camoufly">
-  <meta property="og:title" content="camoufly" />
-  <meta property="og:image" content="https://seeuinthe.dance/og.jpg" />
-  <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=IBM+Plex+Sans:wght@300;400&display=swap" rel="stylesheet">
   <title>camoufly</title>
   <style>
+    :root {
+      --bg: #000;
+      --fg: #e8e4dc;
+      --accent: #c8ff00;
+      --dim: rgba(232,228,220,0.28);
+      --dim2: rgba(232,228,220,0.08);
+      --node-size: 10px;
+      --line-color: rgba(232,228,220,0.18);
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     html, body {
       width: 100%; height: 100%;
-      font-family: 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+      font-family: 'IBM Plex Mono', monospace;
       -webkit-font-smoothing: antialiased;
-      background: #000;
+      background: var(--bg);
+      color: var(--fg);
       overflow: hidden;
     }
 
-    /* video background */
     .bg { position: fixed; inset: 0; overflow: hidden; z-index: 0; }
     .bg video {
       position: absolute; inset: 0;
       width: 100%; height: 100%;
-      object-fit: cover; object-position: center center;
+      object-fit: cover; object-position: center;
       pointer-events: none;
     }
     .bg::after {
       content: ''; position: absolute; inset: 0;
-      background: rgba(0,0,0,0.25);
+      background: rgba(0,0,0,0.72);
     }
 
-    /* password field — dead center */
-    .pwd {
-      position: fixed; inset: 0; z-index: 10;
-      display: flex; align-items: center; justify-content: center;
+    /* clock only */
+    .status {
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      z-index: 5; font-size: 9px; letter-spacing: 0.18em;
+      color: var(--dim); pointer-events: none;
     }
-    .pwd input {
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.22); border-right: none;
-      border-radius: 6px 0 0 6px; color: #fff;
-      font-family: inherit; font-size: 11px; letter-spacing: 0.1em;
-      padding: 8px 14px; width: 140px; outline: none;
-      transition: border-color 0.2s, background 0.2s;
+
+    /* layers */
+    #layer-pwd, #layer-timeline, #layer-viewer {
+      position: fixed; inset: 0; z-index: 10;
+      transition: opacity 0.4s ease;
+    }
+    #layer-pwd { display: flex; align-items: center; justify-content: center; }
+    #layer-timeline { overflow: hidden; }
+    #layer-viewer { display: none; }
+    .layer-hidden { opacity: 0 !important; pointer-events: none !important; }
+
+    /* password */
+    .pwd-box { display: flex; flex-direction: column; align-items: center; gap: 32px; }
+    .pwd-row { display: flex; }
+    .pwd-row input {
+      background: rgba(232,228,220,0.05);
+      border: 1px solid rgba(232,228,220,0.2); border-right: none;
+      border-radius: 2px 0 0 2px; color: var(--fg);
+      font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+      letter-spacing: 0.12em; padding: 9px 16px; width: 160px;
+      outline: none; transition: border-color 0.2s, background 0.2s;
       -webkit-text-security: disc;
     }
-    .pwd input::placeholder { color: rgba(255,255,255,0.28); letter-spacing: 0.08em; }
-    .pwd input:focus { background: rgba(255,255,255,0.13); border-color: rgba(255,255,255,0.5); }
-    .pwd button {
-      background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.22);
-      border-radius: 0 6px 6px 0; color: rgba(255,255,255,0.5);
-      font-family: inherit; font-size: 12px; padding: 8px 12px;
-      cursor: pointer; transition: background 0.2s, color 0.2s; line-height: 1;
+    .pwd-row input::placeholder { color: rgba(232,228,220,0.2); }
+    .pwd-row input:focus { background: rgba(232,228,220,0.09); border-color: rgba(232,228,220,0.45); }
+    .pwd-row button {
+      background: rgba(232,228,220,0.07);
+      border: 1px solid rgba(232,228,220,0.2);
+      border-radius: 0 2px 2px 0; color: rgba(232,228,220,0.4);
+      font-family: 'IBM Plex Mono', monospace; font-size: 13px;
+      padding: 9px 14px; cursor: pointer;
+      transition: background 0.2s, color 0.2s;
     }
-    .pwd button:hover { background: rgba(255,255,255,0.2); color: #fff; }
-    .pwd.error input { border-color: rgba(255,70,70,0.7); animation: shake 0.28s ease; }
+    .pwd-row button:hover { background: rgba(232,228,220,0.15); color: var(--fg); }
+    .pwd-box.error .pwd-row input {
+      border-color: rgba(255,80,80,0.6);
+      animation: shake 0.3s ease;
+    }
     @keyframes shake {
       0%,100% { transform: translateX(0); }
-      30% { transform: translateX(-5px); }
-      70% { transform: translateX(5px); }
+      30% { transform: translateX(-6px); }
+      70% { transform: translateX(6px); }
     }
+
+    /* timeline */
+    .tl-scroll {
+      position: absolute; inset: 0;
+      overflow-y: auto; overflow-x: hidden;
+      padding: 80px 0;
+      scrollbar-width: thin; scrollbar-color: var(--dim2) transparent;
+    }
+    .tl-scroll::-webkit-scrollbar { width: 3px; }
+    .tl-scroll::-webkit-scrollbar-thumb { background: var(--dim2); border-radius: 2px; }
+    .tl-canvas { position: relative; width: 100%; }
+    .tl-svg {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none; overflow: visible;
+    }
+    .tl-svg path {
+      fill: none; stroke: var(--line-color);
+      stroke-width: 1; stroke-dasharray: 4 6;
+    }
+    .tl-node {
+      position: absolute; transform: translate(-50%, -50%);
+      width: 28px; height: 28px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    .tl-node-dot {
+      width: var(--node-size); height: var(--node-size);
+      border-radius: 50%;
+      border: 1px solid rgba(232,228,220,0.4);
+      background: rgba(232,228,220,0.06);
+      transition: all 0.25s ease; position: relative;
+    }
+    .tl-node:hover .tl-node-dot {
+      border-color: var(--accent);
+      background: rgba(200,255,0,0.12);
+      box-shadow: 0 0 12px rgba(200,255,0,0.35);
+    }
+    .tl-node-label {
+      position: absolute; font-size: 8px; letter-spacing: 0.2em; color: var(--dim);
+      white-space: nowrap; pointer-events: none; transition: color 0.25s;
+    }
+    .tl-node:hover .tl-node-label { color: var(--fg); }
+    .tl-node[data-label-pos="above"] .tl-node-label { bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%); }
+    .tl-node[data-label-pos="below"] .tl-node-label { top: calc(100% + 4px); left: 50%; transform: translateX(-50%); }
+
+    /* viewer */
+    #layer-viewer { background: #000; flex-direction: column; }
+    #layer-viewer.active { display: flex; }
+
+    .viewer-top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 28px; border-bottom: 1px solid var(--dim2); flex-shrink: 0;
+    }
+    .viewer-num-top { font-size: 11px; letter-spacing: 0.25em; color: var(--dim); }
+    .viewer-back {
+      font-size: 9px; letter-spacing: 0.2em; color: var(--dim);
+      background: none; border: 1px solid var(--dim2);
+      border-radius: 2px; padding: 5px 12px;
+      cursor: pointer; font-family: 'IBM Plex Mono', monospace; transition: all 0.2s;
+    }
+    .viewer-back:hover { color: var(--fg); border-color: var(--dim); }
+
+    .viewer-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .viewer-media {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      padding: 28px; min-height: 0;
+    }
+    .viewer-media video, .viewer-media audio, .viewer-media iframe {
+      max-width: 100%; max-height: 100%; border: none; border-radius: 2px;
+    }
+    .viewer-media video { object-fit: contain; max-height: calc(100vh - 280px); }
+    .viewer-media .audio-wrap {
+      display: flex; flex-direction: column; align-items: center; gap: 20px;
+      width: 100%; max-width: 540px;
+    }
+    .viewer-media .audio-wrap audio { width: 100%; }
+    .viewer-media .audio-label { font-size: 10px; letter-spacing: 0.2em; color: var(--dim); }
+    .viewer-media iframe { width: 100%; height: min(380px, 55vh); }
+
+    .viewer-meta {
+      padding: 0 28px 16px;
+      display: flex; align-items: baseline; gap: 20px; flex-shrink: 0;
+    }
+    .viewer-num { font-size: 22px; letter-spacing: -0.02em; color: var(--dim); }
+    .viewer-title { font-size: 13px; letter-spacing: 0.06em; color: var(--fg); }
+    .viewer-date { font-size: 9px; letter-spacing: 0.15em; color: var(--dim); margin-left: auto; }
+
+    .viewer-actions { padding: 0 28px 20px; display: flex; gap: 10px; flex-shrink: 0; }
+    .btn-ghost {
+      font-family: 'IBM Plex Mono', monospace; font-size: 9px;
+      letter-spacing: 0.2em; background: none;
+      border: 1px solid var(--dim2); border-radius: 2px;
+      color: var(--dim); padding: 6px 14px; cursor: pointer;
+      transition: all 0.2s; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-ghost:hover { color: var(--fg); border-color: var(--dim); }
+    .btn-ghost.accent:hover { color: var(--accent); border-color: var(--accent); }
+
+    /* comments */
+    .viewer-comments {
+      border-top: 1px solid var(--dim2); flex-shrink: 0;
+      max-height: 220px; display: flex; flex-direction: column;
+    }
+    .comments-head {
+      padding: 12px 28px; display: flex; align-items: center;
+      justify-content: space-between; flex-shrink: 0;
+    }
+    .comments-head h3 { font-size: 9px; letter-spacing: 0.25em; color: var(--dim); font-weight: 400; }
+    .comments-toggle {
+      font-family: 'IBM Plex Mono', monospace; font-size: 8px;
+      letter-spacing: 0.15em; background: none; border: none;
+      color: var(--dim); cursor: pointer; padding: 2px 6px; transition: color 0.2s;
+    }
+    .comments-toggle:hover { color: var(--fg); }
+    .comments-toggle.muted { color: rgba(255,80,80,0.5); }
+    .comments-list {
+      flex: 1; overflow-y: auto; padding: 0 28px;
+      scrollbar-width: thin; scrollbar-color: var(--dim2) transparent;
+    }
+    .comments-list::-webkit-scrollbar { width: 3px; }
+    .comments-list::-webkit-scrollbar-thumb { background: var(--dim2); }
+    .comment-item {
+      padding: 8px 0; border-bottom: 1px solid var(--dim2);
+      display: flex; gap: 12px; align-items: baseline;
+    }
+    .comment-item:last-child { border-bottom: none; }
+    .comment-ts { font-size: 8px; letter-spacing: 0.1em; color: var(--dim); flex-shrink: 0; }
+    .comment-text { font-size: 10px; color: var(--fg); font-family: 'IBM Plex Sans', sans-serif; line-height: 1.5; }
+    .comments-empty { font-size: 9px; color: var(--dim); padding: 12px 0; letter-spacing: 0.12em; }
+    .comments-form { padding: 10px 28px 14px; display: flex; flex-shrink: 0; }
+    .comments-form input {
+      flex: 1; background: rgba(232,228,220,0.04);
+      border: 1px solid var(--dim2); border-right: none;
+      border-radius: 2px 0 0 2px; color: var(--fg);
+      font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+      padding: 7px 12px; outline: none; transition: border-color 0.2s;
+    }
+    .comments-form input::placeholder { color: var(--dim); }
+    .comments-form input:focus { border-color: var(--dim); }
+    .comments-form button {
+      background: rgba(232,228,220,0.06);
+      border: 1px solid var(--dim2); border-radius: 0 2px 2px 0; color: var(--dim);
+      font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+      padding: 7px 14px; cursor: pointer; transition: all 0.2s;
+    }
+    .comments-form button:hover { color: var(--fg); border-color: var(--dim); }
+    .comments-disabled { padding: 0 28px 14px; font-size: 9px; letter-spacing: 0.15em; color: rgba(255,80,80,0.4); }
+
+    #tx {
+      position: fixed; inset: 0; z-index: 50;
+      background: var(--bg); pointer-events: none;
+      opacity: 0; transition: opacity 0.3s ease;
+    }
+    #tx.in { opacity: 1; pointer-events: all; }
   </style>
 </head>
 <body>
@@ -75,46 +255,271 @@
     </video>
   </div>
 
-  <div class="pwd" id="pwd">
-    <input type="password" id="pwd-input" placeholder="password" autocomplete="off" spellcheck="false">
-    <button id="pwd-btn">→</button>
+  <div class="status" id="status-clock"></div>
+
+  <div id="tx"></div>
+
+  <!-- PASSWORD -->
+  <div id="layer-pwd">
+    <div class="pwd-box" id="pwd-box">
+      <div class="pwd-row">
+        <input type="password" id="pwd-input" placeholder="password" autocomplete="off" spellcheck="false">
+        <button id="pwd-btn">→</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TIMELINE -->
+  <div id="layer-timeline" class="layer-hidden">
+    <div class="tl-scroll" id="tl-scroll">
+      <div class="tl-canvas" id="tl-canvas">
+        <svg class="tl-svg" id="tl-svg"><path id="tl-path" d=""/></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- VIEWER -->
+  <div id="layer-viewer">
+    <div class="viewer-top">
+      <div class="viewer-num-top" id="v-num-top"></div>
+      <button class="viewer-back" id="viewer-back">←</button>
+    </div>
+    <div class="viewer-body">
+      <div class="viewer-media" id="v-media"></div>
+      <div class="viewer-meta">
+        <span class="viewer-num" id="v-num"></span>
+        <span class="viewer-title" id="v-title"></span>
+        <span class="viewer-date" id="v-date"></span>
+      </div>
+      <div class="viewer-actions" id="v-actions"></div>
+      <div class="viewer-comments">
+        <div class="comments-head">
+          <h3>TRANSMISSIONS</h3>
+          <button class="comments-toggle" id="comments-toggle">MUTE</button>
+        </div>
+        <div class="comments-list" id="comments-list"></div>
+        <div class="comments-form" id="comments-form">
+          <input type="text" id="comment-input" placeholder="..." maxlength="280" autocomplete="off">
+          <button id="comment-send">SEND</button>
+        </div>
+        <div class="comments-disabled" id="comments-disabled" style="display:none">TRANSMISSIONS SUSPENDED</div>
+      </div>
+    </div>
   </div>
 
   <script>
-    const wrap  = document.getElementById('pwd');
-    const input = document.getElementById('pwd-input');
-    const btn   = document.getElementById('pwd-btn');
+  const ARTIFACTS = [
+    { id:'001', title:'FABRIC LONDON',     date:'2022-03-12', type:'audio-embed', src:'https://w.soundcloud.com/player/?url=https%3A//soundcloud.com/camoufly&color=%23c8ff00&auto_play=false&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false', download:null },
+    { id:'002', title:'PANORAMA BAR',      date:'2023-07-08', type:'video-embed', src:'https://www.youtube.com/embed/dQw4w9WgXcQ', download:null },
+    { id:'003', title:'BOILER ROOM MILAN', date:'2024-01-20', type:'audio-mp3',   src:'/audio/003.mp3', download:'/audio/003.mp3' },
+  ];
 
-    async function check() {
-      const val = input.value.trim();
-      if (!val) return;
-      btn.textContent = '…';
-      btn.disabled = true;
-      try {
-        const res  = await fetch('/api/unlock', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: val })
-        });
-        const data = await res.json();
-        if (data.url) {
-          window.location.href = data.url;
-        } else {
-          throw new Error();
-        }
-      } catch {
-        wrap.classList.add('error');
-        input.value = '';
-        btn.textContent = '→';
-        btn.disabled = false;
-        setTimeout(() => wrap.classList.remove('error'), 500);
-        input.focus();
-      }
+  // clock
+  setInterval(() => {
+    const d = new Date();
+    document.getElementById('status-clock').textContent = d.toUTCString().slice(17,25) + ' UTC';
+  }, 1000);
+
+  // transition
+  const tx = document.getElementById('tx');
+  function fade(cb) {
+    tx.classList.add('in');
+    setTimeout(() => { cb(); tx.classList.remove('in'); }, 320);
+  }
+
+  // layers
+  const layerPwd      = document.getElementById('layer-pwd');
+  const layerTimeline = document.getElementById('layer-timeline');
+  const layerViewer   = document.getElementById('layer-viewer');
+  const pwdBox        = document.getElementById('pwd-box');
+  const pwdInput      = document.getElementById('pwd-input');
+  const pwdBtn        = document.getElementById('pwd-btn');
+
+  async function checkPassword() {
+    const val = pwdInput.value.trim();
+    if (!val) return;
+    pwdBtn.textContent = '…';
+    pwdBtn.disabled = true;
+    await new Promise(r => setTimeout(r, 280));
+    if (val.toLowerCase() === 'demo') {
+      fade(() => {
+        layerPwd.classList.add('layer-hidden');
+        layerTimeline.classList.remove('layer-hidden');
+        buildTimeline();
+      });
+    } else {
+      pwdBox.classList.add('error');
+      pwdInput.value = '';
+      pwdBtn.textContent = '→';
+      pwdBtn.disabled = false;
+      setTimeout(() => pwdBox.classList.remove('error'), 500);
+      pwdInput.focus();
+    }
+  }
+
+  pwdBtn.addEventListener('click', checkPassword);
+  pwdInput.addEventListener('keydown', e => { if (e.key === 'Enter') checkPassword(); });
+
+  // timeline
+  function buildTimeline() {
+    const canvas  = document.getElementById('tl-canvas');
+    const svgPath = document.getElementById('tl-path');
+    const scroll  = document.getElementById('tl-scroll');
+    canvas.querySelectorAll('.tl-node').forEach(n => n.remove());
+
+    const W = scroll.clientWidth;
+    const PAD_X = Math.max(60, W * 0.1);
+    const PAD_Y = 80;
+    const ROW_H = 100;
+    const TOTAL = ARTIFACTS.length;
+    const availW = W - PAD_X * 2;
+    const nodesPerRow = Math.max(2, Math.floor(availW / 100));
+    const sepX = availW / (nodesPerRow - 1 || 1);
+    const rows = Math.ceil(TOTAL / nodesPerRow);
+    canvas.style.height = (PAD_Y + rows * ROW_H + PAD_Y) + 'px';
+
+    const positions = [];
+    for (let i = 0; i < TOTAL; i++) {
+      const row = Math.floor(i / nodesPerRow);
+      const col = i % nodesPerRow;
+      const ltr = row % 2 === 0;
+      const x = ltr ? PAD_X + col * sepX : PAD_X + (nodesPerRow - 1 - col) * sepX;
+      const y = PAD_Y + row * ROW_H;
+      positions.push({ x, y, row });
     }
 
-    btn.addEventListener('click', check);
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') check(); });
-  </script>
+    let d = `M ${positions[0].x} ${positions[0].y}`;
+    for (let i = 1; i < positions.length; i++) {
+      const p = positions[i-1], c = positions[i];
+      if (p.row === c.row) { d += ` L ${c.x} ${c.y}`; }
+      else { const m = (p.y + c.y) / 2; d += ` L ${p.x} ${m} L ${c.x} ${m} L ${c.x} ${c.y}`; }
+    }
+    svgPath.setAttribute('d', d);
 
+    positions.forEach((pos, i) => {
+      const art = ARTIFACTS[i];
+      const node = document.createElement('div');
+      node.className = 'tl-node';
+      node.style.left = pos.x + 'px';
+      node.style.top  = pos.y + 'px';
+      node.dataset.labelPos = pos.row % 2 === 0 ? 'above' : 'below';
+      node.innerHTML = `<div class="tl-node-dot"></div><div class="tl-node-label">#${art.id}</div>`;
+      node.addEventListener('click', () => openArtifact(art));
+      canvas.appendChild(node);
+    });
+  }
+
+  let resizeT;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeT);
+    resizeT = setTimeout(() => { if (!layerTimeline.classList.contains('layer-hidden')) buildTimeline(); }, 200);
+  });
+
+  // viewer
+  let currentArtifact = null;
+  let commentsEnabled = true;
+
+  function openArtifact(art) {
+    currentArtifact = art;
+    fade(() => {
+      document.getElementById('v-num-top').textContent = '#' + art.id;
+      document.getElementById('v-num').textContent   = '#' + art.id;
+      document.getElementById('v-title').textContent = art.title;
+      document.getElementById('v-date').textContent  = art.date;
+
+      const media = document.getElementById('v-media');
+      media.innerHTML = '';
+      if (art.type === 'video-mp4') {
+        const v = document.createElement('video'); v.src = art.src; v.controls = true; media.appendChild(v);
+      } else if (art.type === 'audio-mp3') {
+        const wrap = document.createElement('div'); wrap.className = 'audio-wrap';
+        const lbl = document.createElement('div'); lbl.className = 'audio-label'; lbl.textContent = '#' + art.id + ' — ' + art.title;
+        const a = document.createElement('audio'); a.src = art.src; a.controls = true;
+        wrap.appendChild(lbl); wrap.appendChild(a); media.appendChild(wrap);
+      } else {
+        const f = document.createElement('iframe'); f.src = art.src; f.allow = 'autoplay; fullscreen'; f.allowFullscreen = true; media.appendChild(f);
+      }
+
+      const acts = document.getElementById('v-actions');
+      acts.innerHTML = '';
+      if (art.download) {
+        const dl = document.createElement('a'); dl.className = 'btn-ghost accent'; dl.href = art.download; dl.download = ''; dl.textContent = '↓ DOWNLOAD'; acts.appendChild(dl);
+      }
+
+      layerTimeline.classList.add('layer-hidden');
+      layerViewer.style.display = 'flex';
+      layerViewer.classList.add('active');
+      loadComments(art.id);
+      updateCommentsUI();
+    });
+  }
+
+  document.getElementById('viewer-back').addEventListener('click', () => {
+    fade(() => {
+      document.getElementById('v-media').querySelectorAll('video,audio').forEach(m => m.pause());
+      document.getElementById('v-media').querySelectorAll('iframe').forEach(f => f.src = f.src);
+      layerViewer.style.display = 'none';
+      layerViewer.classList.remove('active');
+      layerTimeline.classList.remove('layer-hidden');
+    });
+  });
+
+  // comments
+  const BAD_WORDS = ['spam','fuck','shit','cunt','nigger','nazi','kys','kill yourself','asshole'];
+  const isBad = t => BAD_WORDS.some(w => t.toLowerCase().includes(w));
+
+  function updateCommentsUI() {
+    const form = document.getElementById('comments-form');
+    const off  = document.getElementById('comments-disabled');
+    const btn  = document.getElementById('comments-toggle');
+    form.style.display = commentsEnabled ? 'flex' : 'none';
+    off.style.display  = commentsEnabled ? 'none' : 'block';
+    btn.textContent = commentsEnabled ? 'MUTE' : 'UNMUTE';
+    btn.classList.toggle('muted', !commentsEnabled);
+  }
+  document.getElementById('comments-toggle').addEventListener('click', () => { commentsEnabled = !commentsEnabled; updateCommentsUI(); });
+
+  const _mock = {};
+  async function loadComments(id) {
+    await new Promise(r => setTimeout(r, 180));
+    if (!_mock[id]) _mock[id] = [
+      { text: 'incredible set, was there for this one', ts: 1672531200000 },
+      { text: 'the drop at 47min is insane', ts: 1683110400000 },
+    ];
+    renderComments(_mock[id]);
+  }
+
+  function renderComments(comments) {
+    const list = document.getElementById('comments-list');
+    if (!comments.length) { list.innerHTML = '<div class="comments-empty">NO TRANSMISSIONS YET</div>'; return; }
+    list.innerHTML = '';
+    comments.forEach(c => {
+      const el = document.createElement('div'); el.className = 'comment-item';
+      const ts = new Date(c.ts).toISOString().slice(0,10);
+      el.innerHTML = `<span class="comment-ts">${ts}</span><span class="comment-text">${esc(c.text)}</span>`;
+      list.appendChild(el);
+    });
+    list.scrollTop = list.scrollHeight;
+  }
+
+  function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  async function sendComment() {
+    if (!commentsEnabled || !currentArtifact) return;
+    const inp = document.getElementById('comment-input');
+    const text = inp.value.trim();
+    if (!text || text.length < 2) return;
+    if (isBad(text)) { inp.value = ''; inp.placeholder = 'REJECTED'; setTimeout(() => inp.placeholder = '...', 2000); return; }
+    const id = currentArtifact.id;
+    if (!_mock[id]) _mock[id] = [];
+    _mock[id].push({ text, ts: Date.now() });
+    inp.value = '';
+    renderComments(_mock[id]);
+    inp.focus();
+  }
+
+  document.getElementById('comment-send').addEventListener('click', sendComment);
+  document.getElementById('comment-input').addEventListener('keydown', e => { if (e.key === 'Enter') sendComment(); });
+  </script>
 </body>
 </html>
