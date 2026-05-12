@@ -31,6 +31,7 @@ async function isSpam(text, userIp, userAgent) {
   });
 
   const body = await res.text();
+  console.log('Akismet response:', body.trim(), '| text:', text, '| ip:', userIp);
   return body.trim() === 'true';
 }
 
@@ -62,7 +63,7 @@ export default async function handler(req, res) {
     try {
       const spam = await isSpam(text, userIp, userAgent);
       if (spam) {
-        // silently discard — return existing comments so user doesn't know
+        console.log('Spam blocked:', text);
         const raw = await redis.lrange(key(id), 0, -1);
         const comments = raw.map(r => (typeof r === 'string' ? JSON.parse(r) : r));
         return res.status(200).json({ comments });
@@ -71,7 +72,6 @@ export default async function handler(req, res) {
       console.error('Akismet error:', err);
       // Akismet unreachable — let comment through
     }
-
 
     const entry = JSON.stringify({ text: text.trim(), ts: Date.now() });
     await redis.rpush(key(id), entry);
