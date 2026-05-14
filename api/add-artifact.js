@@ -82,8 +82,8 @@ async function uploadToR2(fileBuffer, filename, mimetype) {
     throw new Error(`R2 upload failed: ${res.status} ${text}`);
   }
 
-  // Return public URL — assumes bucket has public access or you use a custom domain
-  return `${endpoint}/${bucket}/${filename}`;
+  const publicUrl = process.env.R2_PUBLIC_URL || `${endpoint}/${bucket}`;
+  return `${publicUrl}/${filename}`;
 }
 
 // ── GitHub API ───────────────────────────────────────────────
@@ -124,18 +124,20 @@ async function updateIndexFile(content, sha, commitMessage) {
 }
 
 function injectArtifact(htmlContent, artifact) {
-  // Find the ARTIFACTS array and inject the new entry
+  // Find the closing ]; of the ARTIFACTS array and inject before it
   const marker = 'const ARTIFACTS = [';
-  const idx = htmlContent.indexOf(marker);
-  if (idx === -1) throw new Error('ARTIFACTS array not found in index.html');
+  const startIdx = htmlContent.indexOf(marker);
+  if (startIdx === -1) throw new Error('ARTIFACTS array not found in index.html');
+
+  // Find the closing ]; after the array start
+  const closingIdx = htmlContent.indexOf('];', startIdx);
+  if (closingIdx === -1) throw new Error('ARTIFACTS array closing not found');
 
   // Build new entry
-  const entry = `
-    { id:'${artifact.id}', title:'${artifact.title}', date:'${artifact.date}', type:'${artifact.type}', src:'${artifact.src}', download:${artifact.download ? `'${artifact.download}'` : 'null'} },`;
+  const entry = `  { id:'${artifact.id}', title:'${artifact.title}', date:'${artifact.date}', type:'${artifact.type}', src:'${artifact.src}', download:${artifact.download ? `'${artifact.download}'` : 'null'} },
+  `;
 
-  // Insert after the opening bracket
-  const insertAt = idx + marker.length;
-  return htmlContent.slice(0, insertAt) + entry + htmlContent.slice(insertAt);
+  return htmlContent.slice(0, closingIdx) + entry + htmlContent.slice(closingIdx);
 }
 
 function getNextId(htmlContent) {
