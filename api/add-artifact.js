@@ -1,69 +1,41 @@
 /**
  * /api/add-artifact.js
- * POST { title, date, type, src?, file?, filename?, mimetype? }
- * - If type is video-mp4 or audio-mp3: expects base64 file + filename + mimetype
- * - If type is video-embed or audio-embed: expects src URL
- * Updates ARTIFACTS array in index.html via GitHub API and triggers redeploy
- *
- * Env vars needed:
- *   GITHUB_TOKEN, GITHUB_REPO
- *   R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_ENDPOINT, R2_BUCKET
- *   ADD_ARTIFACT_SECRET (a secret you set to protect this endpoint)
+ * POST { title, date, type, src?, file?, filename?, mimetype?, gallery_files? }
+ * Env vars: GITHUB_TOKEN, GITHUB_REPO, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY,
+ *           R2_ENDPOINT, R2_BUCKET, R2_PUBLIC_URL, ADD_ARTIFACT_SECRET
  */
 
 import crypto from 'crypto';
 
-// ── S3/R2 signing (AWS Signature V4) ────────────────────────
 function hmac(key, data) {
   return crypto.createHmac('sha256', key).update(data).digest();
 }
-
 function hmacHex(key, data) {
   return crypto.createHmac('sha256', key).update(data).digest('hex');
 }
 
 async function uploadToR2(fileBuffer, filename, mimetype) {
-  const endpoint = process.env.R2_ENDPOINT; // e.g. https://ACCOUNTID.r2.cloudflarestorage.com
-  const bucket   = process.env.R2_BUCKET;
+  const endpoint  = process.env.R2_ENDPOINT;
+  const bucket    = process.env.R2_BUCKET;
   const accessKey = process.env.R2_ACCESS_KEY_ID;
   const secretKey = process.env.R2_SECRET_ACCESS_KEY;
 
   const url = new URL(`/${bucket}/${filename}`, endpoint);
   const host = url.host;
   const now = new Date();
-  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '').slice(0, 15) + 'Z';
+  const amzDate  = now.toISOString().replace(/[:-]|\.\d{3}/g, '').slice(0, 15) + 'Z';
   const dateStamp = amzDate.slice(0, 8);
-  const region = 'auto';
-  const service = 's3';
+  const region = 'auto', service = 's3';
 
   const payloadHash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
-
   const canonicalHeaders = `host:${host}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${amzDate}\n`;
   const signedHeaders = 'host;x-amz-content-sha256;x-amz-date';
-
-  const canonicalRequest = [
-    'PUT',
-    `/${bucket}/${filename}`,
-    '',
-    canonicalHeaders,
-    signedHeaders,
-    payloadHash,
-  ].join('\n');
-
+  const canonicalRequest = ['PUT', `/${bucket}/${filename}`, '', canonicalHeaders, signedHeaders, payloadHash].join('\n');
   const credentialScope = `${dateStamp}/${region}/${service}/aws4_request`;
-  const stringToSign = [
-    'AWS4-HMAC-SHA256',
-    amzDate,
-    credentialScope,
-    crypto.createHash('sha256').update(canonicalRequest).digest('hex'),
-  ].join('\n');
-
-  const signingKey = hmac(
-    hmac(hmac(hmac(`AWS4${secretKey}`, dateStamp), region), service),
-    'aws4_request'
-  );
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, credentialScope,
+    crypto.createHash('sha256').update(canonicalRequest).digest('hex')].join('\n');
+  const signingKey = hmac(hmac(hmac(hmac(`AWS4${secretKey}`, dateStamp), region), service), 'aws4_request');
   const signature = hmacHex(signingKey, stringToSign);
-
   const authorization = `AWS4-HMAC-SHA256 Credential=${accessKey}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
 
   const res = await fetch(url.toString(), {
@@ -86,23 +58,17 @@ async function uploadToR2(fileBuffer, filename, mimetype) {
   return `${publicUrl}/${filename}`;
 }
 
-// ── GitHub API ───────────────────────────────────────────────
 async function getIndexFile() {
-  const repo  = process.env.GITHUB_REPO;
-  const token = process.env.GITHUB_TOKEN;
+  const repo = process.env.GITHUB_REPO, token = process.env.GITHUB_TOKEN;
   const res = await fetch(`https://api.github.com/repos/${repo}/contents/index.html`, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Accept': 'application/vnd.github.v3+json',
-    },
+    headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/vnd.github.v3+json' },
   });
   if (!res.ok) throw new Error(`GitHub GET failed: ${res.status}`);
-  return res.json(); // { content (base64), sha }
+  return res.json();
 }
 
 async function updateIndexFile(content, sha, commitMessage) {
-  const repo  = process.env.GITHUB_REPO;
-  const token = process.env.GITHUB_TOKEN;
+  const repo = process.env.GITHUB_REPO, token = process.env.GITHUB_TOKEN;
   const res = await fetch(`https://api.github.com/repos/${repo}/contents/index.html`, {
     method: 'PUT',
     headers: {
@@ -116,26 +82,21 @@ async function updateIndexFile(content, sha, commitMessage) {
       sha,
     }),
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`GitHub PUT failed: ${res.status} ${text}`);
-  }
+  if (!res.ok) { const text = await res.text(); throw new Error(`GitHub PUT failed: ${res.status} ${text}`); }
   return res.json();
 }
 
 function injectArtifact(htmlContent, artifact) {
-  // Find the closing ]; of the ARTIFACTS array and inject before it
   const marker = 'const ARTIFACTS = [';
   const startIdx = htmlContent.indexOf(marker);
-  if (startIdx === -1) throw new Error('ARTIFACTS array not found in index.html');
-
-  // Find the closing ]; after the array start
+  if (startIdx === -1) throw new Error('ARTIFACTS array not found');
   const closingIdx = htmlContent.indexOf('];', startIdx);
-  if (closingIdx === -1) throw new Error('ARTIFACTS array closing not found');
+  if (closingIdx === -1) throw new Error('ARTIFACTS closing not found');
 
-  // Build new entry
-  const entry = `  { id:'${artifact.id}', title:'${artifact.title}', date:'${artifact.date}', type:'${artifact.type}', src:'${artifact.src}', download:${artifact.download ? `'${artifact.download}'` : 'null'} },
-  `;
+  // src: for gallery it's a pipe-separated string, for others a plain URL
+  const srcVal = Array.isArray(artifact.src) ? artifact.src.join('|') : artifact.src;
+  const downloadVal = artifact.download ? `'${artifact.download}'` : 'null';
+  const entry = `  { id:'${artifact.id}', title:'${artifact.title}', date:'${artifact.date}', type:'${artifact.type}', src:'${srcVal}', download:${downloadVal} },\n  `;
 
   return htmlContent.slice(0, closingIdx) + entry + htmlContent.slice(closingIdx);
 }
@@ -147,36 +108,44 @@ function getNextId(htmlContent) {
   return String(max + 1).padStart(3, '0');
 }
 
-// ── Handler ──────────────────────────────────────────────────
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  // Auth check
   const secret = req.headers['x-artifact-secret'];
   if (!secret || secret !== process.env.ADD_ARTIFACT_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const { title, date, type, src, file, filename, mimetype, download } = req.body || {};
+  const { title, date, type, src, file, filename, mimetype, download, gallery_files } = req.body || {};
 
   if (!title || !date || !type) return res.status(400).json({ error: 'Missing fields' });
 
   let mediaSrc = src;
   let downloadUrl = download || null;
 
-  // If file upload (base64)
+  // Single file upload
   if (file && filename && mimetype) {
     const buffer = Buffer.from(file, 'base64');
     const r2Url = await uploadToR2(buffer, filename, mimetype);
     mediaSrc = r2Url;
-    if (type === 'audio-mp3' || type === 'video-mp4') {
-      downloadUrl = r2Url;
-    }
+    if (type === 'audio-mp3' || type === 'video-mp4') downloadUrl = r2Url;
   }
 
-  if (!mediaSrc) return res.status(400).json({ error: 'Missing src or file' });
+  // Gallery upload
+  if (gallery_files && Array.isArray(gallery_files) && gallery_files.length > 0) {
+    const urls = [];
+    for (const f of gallery_files) {
+      const buffer = Buffer.from(f.file, 'base64');
+      const url = await uploadToR2(buffer, f.filename, f.mimetype || 'image/jpeg');
+      urls.push(url);
+    }
+    mediaSrc = urls; // will be joined with | in injectArtifact
+  }
 
-  // Get current index.html from GitHub
+  if (!mediaSrc || (Array.isArray(mediaSrc) && mediaSrc.length === 0)) {
+    return res.status(400).json({ error: 'Missing src or file' });
+  }
+
   const { content: encodedContent, sha } = await getIndexFile();
   const htmlContent = Buffer.from(encodedContent, 'base64').toString('utf8');
 
